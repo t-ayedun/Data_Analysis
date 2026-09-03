@@ -73,3 +73,6 @@ desktop.ini
 
 # Colab "Untitled" scratch notebooks - noise, not work
 Colab Notebooks/Untitled*.ipynb
+
+# Notebook backups
+*.bak
