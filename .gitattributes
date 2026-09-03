@@ -1,0 +1,6 @@
+# Strip notebook outputs on commit; working copy keeps them.
+# Filter is wired to `python -m nbstripout` in .git/config (nbstripout.exe is not on PATH).
+*.ipynb filter=nbstripout diff=ipynb
+
+# Treat notebooks as text for diffing, never auto-convert line endings inside them.
+*.ipynb -text

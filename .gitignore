@@ -1,0 +1,75 @@
+# ---------------------------------------------------------------
+# Secrets - never commit. Credentials belong in Colab Secrets.
+# ---------------------------------------------------------------
+*.pem
+*.key
+*.ppk
+.env
+.env.*
+!.env.example
+secrets.json
+credentials.json
+service-account*.json
+
+# ---------------------------------------------------------------
+# Large data files - kept locally, not versioned
+#   all_litres_data.csv                 ~13.8 MB
+#   smarterise_commercial_client_data.csv ~11.3 MB
+# ---------------------------------------------------------------
+*.csv
+
+# ---------------------------------------------------------------
+# Original Google Drive zip exports (~22 MB, already extracted)
+# ---------------------------------------------------------------
+Archive/
+*.zip
+
+# ---------------------------------------------------------------
+# A colleague's work - not ours to version or publish.
+# Kept locally; excluded from the repo deliberately.
+# ---------------------------------------------------------------
+Data Analyst Capstone Project - Ibrahim Salman/
+
+# ---------------------------------------------------------------
+# Generated report artifacts - reproduced by running the notebook
+# (filenames taken from the savefig / to_csv calls in
+#  "Monthly Report Grading + Report Visuals.ipynb")
+# ---------------------------------------------------------------
+grade_distribution_pie.png
+comparison_chart.png
+monthly_day_consumption.png
+pie_chart.png
+auto_download_sankey.html
+*_grades.csv
+reliability_metrics_*.png
+
+# ---------------------------------------------------------------
+# Python / Jupyter
+# ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+.python-version
+
+# ---------------------------------------------------------------
+# OS / editor cruft
+# ---------------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+
+# Office lock files, left behind when a doc is open
+~$*
+
+# Google Drive / Colab sync leftovers
+*.gdoc
+*.gsheet
+*.gslides
+.tmp.driveupload/
+.tmp.drivedownload/
+
+# Colab "Untitled" scratch notebooks - noise, not work
+Colab Notebooks/Untitled*.ipynb
