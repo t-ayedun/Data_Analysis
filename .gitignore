@@ -76,3 +76,7 @@ Colab Notebooks/Untitled*.ipynb
 
 # Notebook backups
 *.bak
+
+# Local secrets file read by the notebook's loader
+.sbee_secrets.json
+sbee_secrets.json
