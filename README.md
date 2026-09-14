@@ -24,11 +24,22 @@ Scoring components (100 points total):
 Grades: **A** ≥ 90, **B** ≥ 75, **C** ≥ 60, **D** < 60 (🟢 🟡 🟠 🔴).
 
 Outputs (all gitignored — reproduced by running the notebook) land under
-`reports/<REPORT_MONTH>/`, month-prefixed so nothing overwrites a prior run:
-`<month>_grades.csv`, `<month>_grade_distribution_pie.png`,
+`<reports root>/<REPORT_MONTH>/`, month-prefixed so nothing overwrites a prior
+run: `<month>_grades.csv`, `<month>_grade_distribution_pie.png`,
 `<month>_comparison_chart.png`, `<month>_migration_sankey.html`,
 `<month>_graded_report_map.html`, `<month>_monthly_day_consumption.png` — plus
 a zipped copy of the whole folder from the notebook's last cell.
+
+**The reports root is Google Drive (`MyDrive/SBEE Monthly Reports/`) when
+Drive is mounted, mounting it automatically if it isn't — falling back to
+the Colab VM's local, non-persistent disk only if Drive is declined or
+unavailable.** This matters specifically for the `File → Open notebook →
+GitHub` workflow below: that loads only the notebook's own content into a
+brand-new, disposable VM each time, nothing else — a local-only `reports/`
+folder would start empty every single month with no memory of the last run.
+Drive is the one thing that actually survives between sessions, which is
+also why the *next* month's run can auto-find *this* month's saved CSV (see
+"Monthly control panel" below) instead of needing it hand-typed every time.
 
 ### Monthly control panel
 
