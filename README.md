@@ -23,19 +23,44 @@ Scoring components (100 points total):
 
 Grades: **A** ≥ 90, **B** ≥ 75, **C** ≥ 60, **D** < 60 (🟢 🟡 🟠 🔴).
 
-Outputs (all gitignored — reproduced by running the notebook):
-`<month>_grades.csv`, `grade_distribution_pie.png`, `comparison_chart.png`,
-`auto_download_sankey.html`, `monthly_day_consumption.png`, and a folium site map.
+Outputs (all gitignored — reproduced by running the notebook) land under
+`reports/<REPORT_MONTH>/`, month-prefixed so nothing overwrites a prior run:
+`<month>_grades.csv`, `<month>_grade_distribution_pie.png`,
+`<month>_comparison_chart.png`, `<month>_migration_sankey.html`,
+`<month>_graded_report_map.html`, `<month>_monthly_day_consumption.png` — plus
+a zipped copy of the whole folder from the notebook's last cell.
+
+### Monthly control panel
+
+The notebook's first code cell is the only thing that should need editing each
+month:
+
+```python
+REPORT_MONTH = "2026-08"       # this month's report
+PREV_REPORT_MONTH = None       # None = auto (the month before); set explicitly
+                                # only for a non-adjacent comparison
+```
+
+Change `REPORT_MONTH`, then `Runtime → Run all`. Every date, filename, chart
+title, and the previous month's grade counts (auto-loaded from that month's
+own saved CSV, with a `MANUAL_PREVIOUS_MONTH_COUNTS` fallback for the first
+run or a missing file) derive from those two values — no other cell should
+need hand-editing.
 
 ### Related notebooks
 
 | Notebook | Role |
 | --- | --- |
-| `Plots for Monthly Reports - No Access to DB.ipynb` | Same visuals, grade counts hardcoded — offline fallback |
-| `Connect to SBEE Database.ipynb` | Earlier version of the same pipeline (January, `jan_grades.csv`) |
+| `Plots for Monthly Reports - No Access to DB.ipynb` | Same visuals, grade counts hardcoded — offline fallback. Same hand-edit-per-month problem as below; not yet migrated to the control-panel pattern — planned follow-up |
+| `Connect to SBEE Database.ipynb` | Earlier version of the same pipeline (January, `jan_grades.csv`). Same hand-edit-per-month problem; not yet migrated — planned follow-up |
 | `Weekly Report Plots.ipynb` | Same DB connection, 7-day window — the **weekly** report |
 | `Reliability Data.ipynb`, `Reliability Metrics Q1 2026.ipynb`, `Combine CSVs & Final Reliability Metrics Visual.ipynb` | Multi-month power-cut / reliability series |
 | `ABMF May 2024.ipynb`, `June 2024.ipynb` | ABMF project — grid/generator kWh from CSVs, unrelated to SBEE |
+
+`Colab Notebooks/Archived Reports/` holds one-off monthly notebook clones from
+before the control panel existed (July, August) — kept as a record of what those
+reports actually looked like. That pattern is retired: the canonical notebook
+above is reused every month now, nothing new gets cloned.
 
 ## Running the notebooks
 
@@ -94,11 +119,13 @@ generated report artifacts, `Untitled*.ipynb` scratch notebooks, and the
 
 ## Known issues
 
-- **`Monthly Report Grading + Report Visuals.ipynb`** — the grade-distribution pie
-  chart reads `site_summary['Grade']`, but that column is not created until the
-  folium cell much further down. A clean top-to-bottom run raises `KeyError: 'Grade'`.
-  There are also two parallel grade columns (`Grade` and `Final Grade`) produced by
-  two different functions.
 - The secrets/tunnel cell catches its own exceptions and prints `❌ Database error`,
   so the cell "succeeds" while `df` is never assigned. Failures surface later as a
   confusing `NameError: name 'df' is not defined`.
+- The Sankey's flow lines (who moved from which grade to which) are a best-fit
+  *estimate* reconciling both months' totals, not a verified per-site migration —
+  this notebook doesn't retain each site's grade across months to compute a real
+  one. Marked in the chart's own title and in a code comment.
+- `Connect to SBEE Database.ipynb` and `Plots for Monthly Reports - No Access to
+  DB.ipynb` still hand-edit dates/filenames/counts per month — not yet migrated to
+  the control-panel pattern above.

@@ -31,15 +31,15 @@ Archive/
 Data Analyst Capstone Project - Ibrahim Salman/
 
 # ---------------------------------------------------------------
-# Generated report artifacts - reproduced by running the notebook
-# (filenames taken from the savefig / to_csv calls in
-#  "Monthly Report Grading + Report Visuals.ipynb")
+# Generated report artifacts - reproduced by running the notebook.
+# "Monthly Report Grading + Report Visuals.ipynb" writes every month's
+# outputs under reports/<REPORT_MONTH>/ (control-panel driven, see the
+# notebook's first cell) - one rule covers all of it, all months.
 # ---------------------------------------------------------------
-grade_distribution_pie.png
-comparison_chart.png
-monthly_day_consumption.png
-pie_chart.png
-auto_download_sankey.html
+reports/
+
+# Still needed for the *other*, unmodified sibling notebooks that write a
+# grades CSV straight to the repo root, e.g. Connect to SBEE Database.ipynb
 *_grades.csv
 reliability_metrics_*.png
 
