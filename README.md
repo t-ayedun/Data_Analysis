@@ -24,22 +24,22 @@ Scoring components (100 points total):
 Grades: **A** ≥ 90, **B** ≥ 75, **C** ≥ 60, **D** < 60 (🟢 🟡 🟠 🔴).
 
 Outputs (all gitignored — reproduced by running the notebook) land under
-`<reports root>/<REPORT_MONTH>/`, month-prefixed so nothing overwrites a prior
-run: `<month>_grades.csv`, `<month>_grade_distribution_pie.png`,
-`<month>_comparison_chart.png`, `<month>_migration_sankey.html`,
-`<month>_graded_report_map.html`, `<month>_monthly_day_consumption.png` — plus
-a zipped copy of the whole folder from the notebook's last cell.
+`reports/<REPORT_MONTH>/` on the Colab VM's own disk, month-prefixed so
+nothing overwrites a prior run: `<month>_grades.csv`,
+`<month>_grade_distribution_pie.png`, `<month>_comparison_chart.png`,
+`<month>_migration_sankey.html`, `<month>_graded_report_map.html`,
+`<month>_monthly_day_consumption.png` — plus a zipped copy of the whole
+folder from the notebook's last cell, which also auto-downloads it.
 
-**The reports root is Google Drive (`MyDrive/SBEE Monthly Reports/`) when
-Drive is mounted, mounting it automatically if it isn't — falling back to
-the Colab VM's local, non-persistent disk only if Drive is declined or
-unavailable.** This matters specifically for the `File → Open notebook →
-GitHub` workflow below: that loads only the notebook's own content into a
-brand-new, disposable VM each time, nothing else — a local-only `reports/`
-folder would start empty every single month with no memory of the last run.
-Drive is the one thing that actually survives between sessions, which is
-also why the *next* month's run can auto-find *this* month's saved CSV (see
-"Monthly control panel" below) instead of needing it hand-typed every time.
+`reports/` is local to that one Colab session and does not survive to next
+month — deliberately. `File → Open notebook → GitHub` loads only the
+notebook's own content into a brand-new, disposable VM each time, often run
+by whoever's turn it is, not necessarily the same person or Google account
+as last month. Nothing tied to one person's Drive would reliably work for
+someone else taking over, so this notebook doesn't rely on any shared
+storage at all — see "Monthly control panel" below for how the one piece of
+state that actually needs to carry over (last month's grade counts) is
+handled instead.
 
 ### Monthly control panel
 
@@ -47,16 +47,23 @@ The notebook's first code cell is the only thing that should need editing each
 month:
 
 ```python
-REPORT_MONTH = "2026-08"       # this month's report
-PREV_REPORT_MONTH = None       # None = auto (the month before); set explicitly
-                                # only for a non-adjacent comparison
+REPORT_MONTH = "2026-08"          # this month's report
+PREV_REPORT_MONTH = None          # None = auto (the month before); set
+                                   # explicitly only for a non-adjacent comparison
+PREVIOUS_MONTH_COUNTS = [0, 6, 18, 5]  # from the end of LAST month's run
 ```
 
-Change `REPORT_MONTH`, then `Runtime → Run all`. Every date, filename, chart
-title, and the previous month's grade counts (auto-loaded from that month's
-own saved CSV, with a `MANUAL_PREVIOUS_MONTH_COUNTS` fallback for the first
-run or a missing file) derive from those two values — no other cell should
-need hand-editing.
+Change `REPORT_MONTH`, then `Runtime → Run all`. Every date, filename, and
+chart title derives from `REPORT_MONTH`/`PREV_REPORT_MONTH`.
+`PREVIOUS_MONTH_COUNTS` is the one field that has to be typed in by hand —
+the last cell of every run prints the exact line to paste into next month's
+control panel, e.g. `PREVIOUS_MONTH_COUNTS = [0, 6, 18, 5]`. That's a
+deliberate choice, not a missing feature: it works identically no matter who
+runs the notebook or which Google account they're signed into, because the
+value travels inside the notebook file itself — the one thing every run
+actually has — rather than in a shared file only some people can reach.
+First time this notebook has ever graded sites? Use the real counts if
+known, or `[0, 0, 0, 0]`.
 
 ### Related notebooks
 
