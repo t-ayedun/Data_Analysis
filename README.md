@@ -31,11 +31,25 @@ Right after grading, before the CSV export, five aggregate figures print:
 | --- | --- |
 | Postes en ligne | Sites with voltage present on any phase on the last day of data this month |
 | Score moyen par poste | `site_summary['total_score'].mean()` |
-| Consommation totale (kWh) | `Σ active_power_overall_total × (1/60 h)` — assumes Watts (`POWER_IS_WATTS`, flip if wrong) |
+| Consommation totale (kWh) | `Σ active_power_overall_total × (1/60 h)` — `active_power_overall_total` is already in kW (`POWER_IS_WATTS = False`); see below |
 | Revenu estimé (CFA) | Consommation × 125 CFA/kWh (`TARIFF_CFA_PER_KWH`) |
 | Total des coupures (heures) | `Σ power_cut_flag × (1/60 h)` |
 
-Note: a site with zero voltage all day reads as *both* offline *and* a full day of power-cut time — the raw data can't tell "no grid power" apart from "gateway stopped reporting."
+`POWER_IS_WATTS` was originally left as an untested guess (`True`) and silently
+undercounted a real month's consumption by 1000x. It's derived now, not
+guessed: the grading pipeline's own `updated_transformer_load_percentage`
+(`active_power / power_factor / capacity_kVA`) only comes out to a sane
+0–150%-ish range if `active_power_overall_total` is already the same order of
+magnitude as capacity (50–800 kVA across this portfolio) — i.e. kW. The cell
+also checks this on every run and prints a loud warning if that month's
+average power looks wildly out of scale with the portfolio's capacities,
+rather than silently trusting the flag forever.
+
+Notes on two of the figures: a site with zero voltage all day reads as
+*both* offline *and* a full day of power-cut time — the raw data can't tell
+"no grid power" apart from "gateway stopped reporting." And the online-site
+count also prints the specific offline site IDs, not just the total, so it's
+checkable against sites you already know are having issues.
 
 Month-over-month variation needs last month's four figures, carried the same
 way as the grade counts below: the cell prints `PREVIOUS_MONTH_OVERVIEW =
