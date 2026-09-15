@@ -23,6 +23,25 @@ Scoring components (100 points total):
 
 Grades: **A** ≥ 90, **B** ≥ 75, **C** ≥ 60, **D** < 60 (🟢 🟡 🟠 🔴).
 
+### Aperçu mensuel (monthly overview)
+
+Right after grading, before the CSV export, five aggregate figures print:
+
+| Indicateur | How it's computed |
+| --- | --- |
+| Postes en ligne | Sites with voltage present on any phase on the last day of data this month |
+| Score moyen par poste | `site_summary['total_score'].mean()` |
+| Consommation totale (kWh) | `Σ active_power_overall_total × (1/60 h)` — assumes Watts (`POWER_IS_WATTS`, flip if wrong) |
+| Revenu estimé (CFA) | Consommation × 125 CFA/kWh (`TARIFF_CFA_PER_KWH`) |
+| Total des coupures (heures) | `Σ power_cut_flag × (1/60 h)` |
+
+Note: a site with zero voltage all day reads as *both* offline *and* a full day of power-cut time — the raw data can't tell "no grid power" apart from "gateway stopped reporting."
+
+Month-over-month variation needs last month's four figures, carried the same
+way as the grade counts below: the cell prints `PREVIOUS_MONTH_OVERVIEW =
+{...}` at the end of each run, ready to paste into next month's control
+panel. `None` skips the variation columns for that run.
+
 Outputs (all gitignored — reproduced by running the notebook) land under
 `reports/<REPORT_MONTH>/` on the Colab VM's own disk, month-prefixed so
 nothing overwrites a prior run: `<month>_grades.csv`,
