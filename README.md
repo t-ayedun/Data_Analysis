@@ -7,8 +7,20 @@ Analysis notebooks for SBEE site monitoring and ABMF diesel/energy work.
 The pipeline lives in **`Colab Notebooks/Monthly Report Grading + Report Visuals.ipynb`**.
 
 It tunnels through the bastion into the SBEE Postgres database, pulls a month of
-`smart_device_readings` for ~30 gateways, scores every site, and emits the report
-visuals.
+`smart_device_readings` for the 33 mapped gateways, scores every site, and emits
+the report visuals.
+
+**Sites offline the entire month are excluded before scoring**, not graded — a
+site with `power_cut_flag == 1` (zero voltage on all three phases) for every
+single reading that month, or with zero rows at all, never reaches the grading
+pipeline. Without this, a fully-dead site's `active_power_overall_total == 0` all
+month makes `power_factor_cal` and `updated_transformer_load_percentage` both
+`NaN`, which makes `is_underloaded` read as `0` (`NaN < 30` is `False`) — so every
+`np.select()` score falls through to its `default=` branch, which for 4 of 5
+components is the score for a *healthy* site. A site that produced zero power all
+month was silently grading out at C or even B. The site count each month is
+therefore **33 minus however many were excluded**, printed by the exclusion cell
+and by the online-sites figure below.
 
 Scoring components (100 points total):
 
@@ -23,17 +35,33 @@ Scoring components (100 points total):
 
 Grades: **A** ≥ 90, **B** ≥ 75, **C** ≥ 60, **D** < 60 (🟢 🟡 🟠 🔴).
 
+Right after `power_cut_flag` exists, a **diagnostic-only** cell reports each
+site's reporting completeness for the month (actual rows vs. `days × 1440`
+expected). It feeds no score and no export — it exists to confirm or refute
+whether missing per-minute rows (not the flat 1-minute-per-row assumption used
+for consumption/outage totals) explain a ~10% gap between this notebook's
+consumption total and the SBEE web app's figure for the same month, before any
+change is made to that formula.
+
 ### Aperçu mensuel (monthly overview)
 
 Right after grading, before the CSV export, five aggregate figures print:
 
 | Indicateur | How it's computed |
 | --- | --- |
-| Postes en ligne | Sites with voltage present on any phase on the last day of data this month |
+| Postes en ligne | Sites with voltage present on any phase on the last day of data this month, out of the graded population — sites excluded as offline all month are counted separately, not folded into this denominator |
 | Score moyen par poste | `site_summary['total_score'].mean()` |
 | Consommation totale (kWh) | `Σ active_power_overall_total × (1/60 h)` — `active_power_overall_total` is already in kW (`POWER_IS_WATTS = False`); see below |
 | Revenu estimé (CFA) | Consommation × 125 CFA/kWh (`TARIFF_CFA_PER_KWH`) |
 | Total des coupures (heures) | `Σ power_cut_flag × (1/60 h)` |
+
+All three are computed on `df` *after* offline-all-month sites are filtered out —
+the same population the pie chart, the CSV, and the map use. Before this, a
+fully-dead site's ~44,000 minutes of `power_cut_flag == 1` were counted as
+portfolio outage time on a site that wasn't operating at all, substantially
+inflating this figure. Consumption barely moves either way — a dead site
+contributes ~0 real energy regardless — so this fix doesn't close the gap to
+the web app's total; see the diagnostic cell above for that.
 
 `POWER_IS_WATTS` was originally left as an untested guess (`True`) and silently
 undercounted a real month's consumption by 1000x. It's derived now, not
@@ -45,11 +73,13 @@ also checks this on every run and prints a loud warning if that month's
 average power looks wildly out of scale with the portfolio's capacities,
 rather than silently trusting the flag forever.
 
-Notes on two of the figures: a site with zero voltage all day reads as
-*both* offline *and* a full day of power-cut time — the raw data can't tell
-"no grid power" apart from "gateway stopped reporting." And the online-site
-count also prints the specific offline site IDs, not just the total, so it's
-checkable against sites you already know are having issues.
+Notes on two of the figures: a site with zero voltage on one particular day (but
+not the whole month — that case is excluded from grading entirely, above) still
+reads as *both* offline that day *and* a day of power-cut time — the raw data
+can't tell "no grid power" apart from "gateway stopped reporting" at that
+granularity. And the online-site count also prints the specific offline site
+IDs, not just the total, so it's checkable against sites you already know are
+having issues.
 
 Month-over-month variation needs last month's four figures, carried the same
 way as the grade counts below: the cell prints `PREVIOUS_MONTH_OVERVIEW =
@@ -173,10 +203,27 @@ generated report artifacts, `Untitled*.ipynb` scratch notebooks, and the
 - The secrets/tunnel cell catches its own exceptions and prints `❌ Database error`,
   so the cell "succeeds" while `df` is never assigned. Failures surface later as a
   confusing `NameError: name 'df' is not defined`.
-- The Sankey's flow lines (who moved from which grade to which) are a best-fit
-  *estimate* reconciling both months' totals, not a verified per-site migration —
-  this notebook doesn't retain each site's grade across months to compute a real
-  one. Marked in the chart's own title and in a code comment.
+- The Sankey's flow lines are a **real per-site join** against `history.parquet`
+  (`Status`: `Graded`/`Offline`/`No Data`, one row per roster site every month) —
+  not an aggregate estimate. A site offline last month and graded again this
+  month flows `Offline → grade` directly; only a gateway serial genuinely never
+  seen before lands in `Nouveaux Postes`. One transitional edge case: comparing
+  against a month whose history predates the `Status` column routes that site to
+  a dedicated `Statut inconnu` bucket rather than guessing — fires at most once,
+  for the single month straddling this change.
 - `Connect to SBEE Database.ipynb` and `Plots for Monthly Reports - No Access to
   DB.ipynb` still hand-edit dates/filenames/counts per month — not yet migrated to
   the control-panel pattern above.
+- A site down for *part* of the month (not the whole month, so not excluded) still
+  gets its down-minutes scored via the same NaN-cascade default branches described
+  above for 4 of 5 row-level components, inflating those components' means
+  somewhat. `power_cut_score` does correctly punish the downtime (it's keyed off
+  raw minute-count, not a row-mean), so `total_score` isn't blind to it — just
+  understated relative to zeroing those specific components on
+  `power_cut_flag==1` rows, which would be a bigger change to the scoring
+  formulas than the whole-month exclusion above.
+- The SQL query (tunnel/query cell) hardcodes its own independent copy of the 33
+  gateway serials in `WHERE gateway_serial IN (...)`, separate from
+  `gateway_serial_mapping` (which runs *after* the query). Editing the mapping to
+  add or remove a site has no effect on what's actually pulled from the DB unless
+  the query's list is edited too.
