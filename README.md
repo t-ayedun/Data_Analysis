@@ -37,11 +37,14 @@ Grades: **A** ≥ 90, **B** ≥ 75, **C** ≥ 60, **D** < 60 (🟢 🟡 🟠 �
 
 Right after `power_cut_flag` exists, a **diagnostic-only** cell reports each
 site's reporting completeness for the month (actual rows vs. `days × 1440`
-expected). It feeds no score and no export — it exists to confirm or refute
-whether missing per-minute rows (not the flat 1-minute-per-row assumption used
-for consumption/outage totals) explain a ~10% gap between this notebook's
-consumption total and the SBEE web app's figure for the same month, before any
-change is made to that formula.
+expected). It feeds no score and no export. A real month measured **86.7%**
+completeness against a needed ~89.9% to fully explain a ~10% gap between this
+notebook's consumption total and the SBEE web app's figure — close enough to
+confirm missing rows as a real contributor, not exact enough to justify a
+blind "scale up by 1/completeness" correction (missing minutes likely skew
+toward periods a site was already at low/zero power, e.g. a comms dropout
+during a power cut loses both at once). That's why consumption/coupure-hours
+below integrate over *actual* elapsed time per reading instead.
 
 ### Aperçu mensuel (monthly overview)
 
@@ -51,17 +54,24 @@ Right after grading, before the CSV export, five aggregate figures print:
 | --- | --- |
 | Postes en ligne | Sites with voltage present on any phase on the last day of data this month, out of the graded population — sites excluded as offline all month are counted separately, not folded into this denominator |
 | Score moyen par poste | `site_summary['total_score'].mean()` |
-| Consommation totale (kWh) | `Σ active_power_overall_total × (1/60 h)` — `active_power_overall_total` is already in kW (`POWER_IS_WATTS = False`); see below |
+| Consommation totale (kWh) | `Σ active_power_overall_total × (real elapsed hours per reading)` — `active_power_overall_total` is already in kW (`POWER_IS_WATTS = False`); see below |
 | Revenu estimé (CFA) | Consommation × 125 CFA/kWh (`TARIFF_CFA_PER_KWH`) |
-| Total des coupures (heures) | `Σ power_cut_flag × (1/60 h)` |
+| Total des coupures (heures) | `Σ power_cut_flag × (real elapsed hours per reading)` |
 
 All three are computed on `df` *after* offline-all-month sites are filtered out —
 the same population the pie chart, the CSV, and the map use. Before this, a
 fully-dead site's ~44,000 minutes of `power_cut_flag == 1` were counted as
 portfolio outage time on a site that wasn't operating at all, substantially
-inflating this figure. Consumption barely moves either way — a dead site
-contributes ~0 real energy regardless — so this fix doesn't close the gap to
-the web app's total; see the diagnostic cell above for that.
+inflating this figure. Consumption barely moves from the exclusion alone — a
+dead site contributes ~0 real energy regardless.
+
+**Consumption and outage hours no longer assume every reading is exactly 1
+minute apart.** Each reading's duration is the actual time until the next
+reading for that site (`timestamp`, already pulled by the query), capped at
+10 minutes so one real outage doesn't get misattributed as sustained full
+power for the whole gap — a gap that long almost certainly means the site
+went dark, not that it kept drawing unmeasured power. This is what closes
+(some or all of) the gap to the web app's total, not the site exclusion.
 
 `POWER_IS_WATTS` was originally left as an untested guess (`True`) and silently
 undercounted a real month's consumption by 1000x. It's derived now, not
