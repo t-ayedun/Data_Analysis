@@ -38,13 +38,30 @@ Grades: **A** ≥ 90, **B** ≥ 75, **C** ≥ 60, **D** < 60 (🟢 🟡 🟠 �
 Right after `power_cut_flag` exists, a **diagnostic-only** cell reports each
 site's reporting completeness for the month (actual rows vs. `days × 1440`
 expected). It feeds no score and no export. A real month measured **86.7%**
-completeness against a needed ~89.9% to fully explain a ~10% gap between this
-notebook's consumption total and the SBEE web app's figure — close enough to
-confirm missing rows as a real contributor, not exact enough to justify a
-blind "scale up by 1/completeness" correction (missing minutes likely skew
-toward periods a site was already at low/zero power, e.g. a comms dropout
-during a power cut loses both at once). That's why consumption/coupure-hours
-below integrate over *actual* elapsed time per reading instead.
+completeness — real gaps exist, concentrated in a handful of long, multi-site,
+near-identical-duration windows (one 82 hours, several ~22.7 hours across
+different sites at once). That pattern matches network-wide outages the
+report itself already documents, not scattered missing single minutes.
+
+A direct SQL query against `smart_device_readings` (bypassing this notebook
+entirely) confirmed those specific windows have **zero rows in the database**,
+not rows this pipeline is failing to pull — ruling out an extraction bug. The
+same query, run with real elapsed-time integration instead of a flat
+1-minute-per-row assumption, moved the total by only ~0.1% for a real month —
+because during a genuine multi-hour outage, true consumption really is near
+zero, so there's nothing meaningful to recover by assuming a longer duration.
+**Consumption/coupure-hours below stay on the simple flat-interval sum** for
+that reason — the added complexity was tested and didn't earn its keep.
+
+The gap to the web app's total (~10% for one month, ~7% for another, checked
+against a published figure) survives even the most generous possible
+accounting of the data this table holds. The live lead: `smart_device_readings`
+also carries `net_import_active_energy_overall_total` (a likely cumulative
+energy register — immune to gaps entirely, since it only needs a start and end
+reading) and `dt_active` (possibly the device's own recorded interval,
+removing the need to infer one at all). Not yet used here — unverified what
+they actually contain — but this is where closing the remaining gap likely
+lives, not in further tuning the per-minute integration.
 
 ### Aperçu mensuel (monthly overview)
 
@@ -54,9 +71,9 @@ Right after grading, before the CSV export, five aggregate figures print:
 | --- | --- |
 | Postes en ligne | Sites with voltage present on any phase on the last day of data this month, out of the graded population — sites excluded as offline all month are counted separately, not folded into this denominator |
 | Score moyen par poste | `site_summary['total_score'].mean()` |
-| Consommation totale (kWh) | `Σ active_power_overall_total × (real elapsed hours per reading)` — `active_power_overall_total` is already in kW (`POWER_IS_WATTS = False`); see below |
+| Consommation totale (kWh) | `Σ active_power_overall_total × (1/60 h)` — `active_power_overall_total` is already in kW (`POWER_IS_WATTS = False`); see below |
 | Revenu estimé (CFA) | Consommation × 125 CFA/kWh (`TARIFF_CFA_PER_KWH`) |
-| Total des coupures (heures) | `Σ power_cut_flag × (real elapsed hours per reading)` |
+| Total des coupures (heures) | `Σ power_cut_flag × (1/60 h)` |
 
 All three are computed on `df` *after* offline-all-month sites are filtered out —
 the same population the pie chart, the CSV, and the map use. Before this, a
@@ -64,14 +81,6 @@ fully-dead site's ~44,000 minutes of `power_cut_flag == 1` were counted as
 portfolio outage time on a site that wasn't operating at all, substantially
 inflating this figure. Consumption barely moves from the exclusion alone — a
 dead site contributes ~0 real energy regardless.
-
-**Consumption and outage hours no longer assume every reading is exactly 1
-minute apart.** Each reading's duration is the actual time until the next
-reading for that site (`timestamp`, already pulled by the query), capped at
-10 minutes so one real outage doesn't get misattributed as sustained full
-power for the whole gap — a gap that long almost certainly means the site
-went dark, not that it kept drawing unmeasured power. This is what closes
-(some or all of) the gap to the web app's total, not the site exclusion.
 
 `POWER_IS_WATTS` was originally left as an untested guess (`True`) and silently
 undercounted a real month's consumption by 1000x. It's derived now, not
@@ -232,6 +241,15 @@ generated report artifacts, `Untitled*.ipynb` scratch notebooks, and the
   understated relative to zeroing those specific components on
   `power_cut_flag==1` rows, which would be a bigger change to the scoring
   formulas than the whole-month exclusion above.
+- Consommation totale still sits ~7–10% below published/web-app figures for two
+  checked months, even under the most generous possible accounting of the data
+  this table holds. Confirmed not an extraction bug (the gaps genuinely don't
+  exist in the database) and not the per-minute interval assumption (tested,
+  moved the total by ~0.1%). Most likely explanation:
+  `net_import_active_energy_overall_total` and/or `dt_active` on
+  `smart_device_readings` — unverified what they contain, but if the former is
+  a cumulative energy register, it would settle this immediately. See the
+  Aperçu mensuel section above.
 - The SQL query (tunnel/query cell) hardcodes its own independent copy of the 33
   gateway serials in `WHERE gateway_serial IN (...)`, separate from
   `gateway_serial_mapping` (which runs *after* the query). Editing the mapping to
