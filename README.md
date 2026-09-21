@@ -53,15 +53,35 @@ zero, so there's nothing meaningful to recover by assuming a longer duration.
 **Consumption/coupure-hours below stay on the simple flat-interval sum** for
 that reason — the added complexity was tested and didn't earn its keep.
 
-The gap to the web app's total (~10% for one month, ~7% for another, checked
-against a published figure) survives even the most generous possible
-accounting of the data this table holds. The live lead: `smart_device_readings`
-also carries `net_import_active_energy_overall_total` (a likely cumulative
-energy register — immune to gaps entirely, since it only needs a start and end
-reading) and `dt_active` (possibly the device's own recorded interval,
-removing the need to infer one at all). Not yet used here — unverified what
-they actually contain — but this is where closing the remaining gap likely
-lives, not in further tuning the per-minute integration.
+Two other `smart_device_readings` columns that looked like promising leads —
+`net_import_active_energy_overall_total` and `dt_active` — turned out to be
+`NULL` for every row sampled, and the two energy-looking columns that *were*
+populated (`energy`, `distributed_electricity`) turned out to just be
+`active_power_overall_total / 60` at different rounding precisions, not a
+richer independent source. Dead end, ruled out with real data rather than
+left open.
+
+**The actual root cause: individual phases can read negative** (a reversed
+CT/current-transformer on one leg, or genuine reverse power flow), and the
+DB's `active_power_overall_total` is a *signed* sum of the three phases — so
+a negative reading on even one phase partially cancels the other two,
+understating true total power drawn on that row. This isn't just a
+consumption bug: `active_power_overall_total` also feeds `power_factor_cal`
+and `updated_transformer_load_percentage`, so it was exposed to grading too.
+
+Fixed once, right after the pull, before anything reads the column: the
+query now also selects `active_power_overall_phase_a/b/c`, and
+`active_power_overall_total` is immediately recomputed as
+`|phase A| + |phase B| + |phase C|` — overwriting the DB's signed total.
+Everything downstream (consumption, `power_factor_cal`, grading) reads the
+same column name and inherits the fix automatically; no other formula
+needed to change. The original DB value survives as
+`active_power_overall_total_raw` for comparison. A single `NULL` phase is
+treated as `0`, not left to propagate as `NaN` — the same failure mode that
+let fully-dead sites grade out at C/B before the whole-month exclusion was
+added, here narrowed to a single missing phase on an otherwise-live row.
+The local raw-data cache self-invalidates if it predates these columns,
+rather than silently reusing stale, uncorrected data.
 
 ### Aperçu mensuel (monthly overview)
 
@@ -71,7 +91,7 @@ Right after grading, before the CSV export, five aggregate figures print:
 | --- | --- |
 | Postes en ligne | Sites with voltage present on any phase on the last day of data this month, out of the graded population — sites excluded as offline all month are counted separately, not folded into this denominator |
 | Score moyen par poste | `site_summary['total_score'].mean()` |
-| Consommation totale (kWh) | `Σ active_power_overall_total × (1/60 h)` — `active_power_overall_total` is already in kW (`POWER_IS_WATTS = False`); see below |
+| Consommation totale (kWh) | `Σ active_power_overall_total × (1/60 h)` — `active_power_overall_total` is already in kW (`POWER_IS_WATTS = False`) and is the phase-absolute-value-corrected total (see above), not the DB's raw column |
 | Revenu estimé (CFA) | Consommation × 125 CFA/kWh (`TARIFF_CFA_PER_KWH`) |
 | Total des coupures (heures) | `Σ power_cut_flag × (1/60 h)` |
 
@@ -241,15 +261,17 @@ generated report artifacts, `Untitled*.ipynb` scratch notebooks, and the
   understated relative to zeroing those specific components on
   `power_cut_flag==1` rows, which would be a bigger change to the scoring
   formulas than the whole-month exclusion above.
-- Consommation totale still sits ~7–10% below published/web-app figures for two
-  checked months, even under the most generous possible accounting of the data
-  this table holds. Confirmed not an extraction bug (the gaps genuinely don't
-  exist in the database) and not the per-minute interval assumption (tested,
-  moved the total by ~0.1%). Most likely explanation:
-  `net_import_active_energy_overall_total` and/or `dt_active` on
-  `smart_device_readings` — unverified what they contain, but if the former is
-  a cumulative energy register, it would settle this immediately. See the
-  Aperçu mensuel section above.
+- Consommation totale sat ~7–10% below published/web-app figures for two
+  checked months, even under the most generous possible accounting of the
+  per-minute data. Confirmed not an extraction bug (the gaps genuinely don't
+  exist in the database), not the per-minute interval assumption (tested,
+  moved the total by ~0.1%), and not a richer unused column
+  (`net_import_active_energy_overall_total`/`dt_active` are unpopulated;
+  `energy`/`distributed_electricity` are just `power/60` restated). The actual
+  cause — signed phase cancellation in the DB's `active_power_overall_total`
+  — is now fixed (see the Aperçu mensuel section above). Whether it fully
+  closes the gap to the published figures hasn't been confirmed against a
+  live re-run yet.
 - The SQL query (tunnel/query cell) hardcodes its own independent copy of the 33
   gateway serials in `WHERE gateway_serial IN (...)`, separate from
   `gateway_serial_mapping` (which runs *after* the query). Editing the mapping to
