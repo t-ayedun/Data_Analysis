@@ -101,18 +101,22 @@ Right after grading, before the CSV export, five aggregate figures print:
 | Revenu estimé (CFA) | Consommation × 125 CFA/kWh (`TARIFF_CFA_PER_KWH`) |
 | Total des coupures (heures) | `Σ power_cut_flag × (1/60 h)` |
 
-All five are computed on `df` *after* sites below the 10-day online threshold
-are filtered out — the same population the pie chart, the CSV, and the map
-use. Before the whole-month-only version of this rule, a fully-dead site's
-~44,000 minutes of `power_cut_flag == 1` were counted as portfolio outage time
-on a site that wasn't operating at all, substantially inflating this figure.
-Consumption barely moves from the exclusion alone — an excluded site
-contributes little real energy regardless. All five also feed the
-month-over-month comparison table further down (not just this standalone
-printout), each shown against last month's figure with a `%` variation —
-revenue's variation is mathematically identical to consumption's, since it's
-a constant multiple of it, but it's tracked as its own history column rather
-than special-cased in the comparison logic.
+**The 10-day exclusion is a grading concept only.** Postes en ligne, Score
+moyen, and the CSV/table/pie/bar/Sankey population are all computed on `df`
+*after* sites below the threshold are filtered out. Consommation totale and
+Total des coupures (and Revenu estimé, since it's a constant multiple of
+consumption) are deliberately the opposite: computed on `df_full`, a snapshot
+of the whole month's pull taken *before* that filter runs, so a site excluded
+from grading for insufficient uptime still has its real energy use and real
+outage-minutes counted in the portfolio totals. Excluding a site from grading
+was never meant to make its actual consumption or actual downtime disappear
+from the month's real figures — those two are separate questions (is this
+site's grade trustworthy vs. how much power did the portfolio actually use).
+All five figures feed the month-over-month comparison table further down (not
+just this standalone printout), each shown against last month's figure with a
+`%` variation — revenue's variation is mathematically identical to
+consumption's, since it's a constant multiple of it, but it's tracked as its
+own history column rather than special-cased in the comparison logic.
 
 `POWER_IS_WATTS` was originally left as an untested guess (`True`) and silently
 undercounted a real month's consumption by 1000x. It's derived now, not
@@ -159,25 +163,24 @@ Outputs (all gitignored — reproduced by running the notebook) land under
 nothing overwrites a prior run: `<month>_grades.csv`,
 `<month>_grade_distribution_pie.png`, `<month>_comparison_chart.png`,
 `<month>_migration_sankey.html`, `<month>_migration_sankey.png`,
-`<month>_graded_report_map.html`, `<month>_graded_report_map.png`,
-`<month>_monthly_day_consumption.png` — plus a zipped copy of the whole
-folder from the notebook's last cell, which also auto-downloads it. The two
-PNGs are static exports of the interactive Sankey/map, for anyone who just
-wants to open a file rather than a browser view: the Sankey PNG uses
-`kaleido`, pinned to **`0.2.1`** in the setup cell near the top of the
-notebook (alongside the paramiko downgrade) — not the newer `kaleido>=1`,
-which needs a separately-fetched Chrome binary that Colab's preinstalled
-plotly doesn't even support asking for (`pio.get_chrome()` doesn't exist
-there; confirmed live). It has to be installed *before* plotly is ever
-imported anywhere in the notebook (its only import is in the Sankey cell
-itself) — plotly caches whether kaleido is available the first time
-anything asks, so installing it only after a failed export in the same
-run doesn't help, the cached answer doesn't get rechecked. If the PNG
-still can't be produced, the cell prints why and moves on rather than
-stopping the map/zip cells further down. The map PNG has no plotly/folium
-equivalent, so it's a separate matplotlib scatter recreating the same
-grade colors and score-scaled marker sizes, auto-scaled to the plotted
-sites' own bounding box rather than a fixed city-wide view.
+`<month>_graded_report_map.html`, `<month>_monthly_day_consumption.png` —
+plus a zipped copy of the whole folder from the notebook's last cell, which
+also auto-downloads it. The Sankey PNG is a static export of the interactive
+HTML version, for anyone who just wants to open a file rather than a browser
+view, via `kaleido` pinned to **`0.2.1`** in the setup cell near the top of
+the notebook (alongside the paramiko downgrade) — not the newer
+`kaleido>=1`, which needs a separately-fetched Chrome binary that Colab's
+preinstalled plotly doesn't even support asking for (`pio.get_chrome()`
+doesn't exist there; confirmed live). It has to be installed *before*
+plotly is ever imported anywhere in the notebook (its only import is in the
+Sankey cell itself) — plotly caches whether kaleido is available the first
+time anything asks, so installing it only after a failed export in the same
+run doesn't help, the cached answer doesn't get rechecked. If the PNG still
+can't be produced, the cell prints why and moves on rather than stopping the
+map/zip cells further down. The map has **no** static PNG export — an
+earlier matplotlib-scatter substitute was removed; it had no basemap behind
+the points and looked worse than just opening the real (tile-backed) HTML
+map and saving that by hand.
 
 `reports/` is local to that one Colab session and does not survive to next
 month — deliberately. `File → Open notebook → GitHub` loads only the
