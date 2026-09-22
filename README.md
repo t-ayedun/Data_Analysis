@@ -164,11 +164,20 @@ nothing overwrites a prior run: `<month>_grades.csv`,
 folder from the notebook's last cell, which also auto-downloads it. The two
 PNGs are static exports of the interactive Sankey/map, for anyone who just
 wants to open a file rather than a browser view: the Sankey PNG uses
-`kaleido` (installed and Chrome-provisioned automatically on first use, via
-`plotly.io.get_chrome()`, if not already present); the map PNG has no
-plotly/folium equivalent, so it's a separate matplotlib scatter recreating
-the same grade colors and score-scaled marker sizes, auto-scaled to the
-plotted sites' own bounding box rather than a fixed city-wide view.
+`kaleido`, pinned to **`0.2.1`** in the setup cell near the top of the
+notebook (alongside the paramiko downgrade) — not the newer `kaleido>=1`,
+which needs a separately-fetched Chrome binary that Colab's preinstalled
+plotly doesn't even support asking for (`pio.get_chrome()` doesn't exist
+there; confirmed live). It has to be installed *before* plotly is ever
+imported anywhere in the notebook (its only import is in the Sankey cell
+itself) — plotly caches whether kaleido is available the first time
+anything asks, so installing it only after a failed export in the same
+run doesn't help, the cached answer doesn't get rechecked. If the PNG
+still can't be produced, the cell prints why and moves on rather than
+stopping the map/zip cells further down. The map PNG has no plotly/folium
+equivalent, so it's a separate matplotlib scatter recreating the same
+grade colors and score-scaled marker sizes, auto-scaled to the plotted
+sites' own bounding box rather than a fixed city-wide view.
 
 `reports/` is local to that one Colab session and does not survive to next
 month — deliberately. `File → Open notebook → GitHub` loads only the
