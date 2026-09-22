@@ -101,17 +101,30 @@ Right after grading, before the CSV export, five aggregate figures print:
 | Revenu estimé (CFA) | Consommation × 125 CFA/kWh (`TARIFF_CFA_PER_KWH`) |
 | Total des coupures (heures) | `Σ power_cut_flag × (1/60 h)` |
 
-**The 10-day exclusion is a grading concept only.** Postes en ligne, Score
-moyen, and the CSV/table/pie/bar/Sankey population are all computed on `df`
-*after* sites below the threshold are filtered out. Consommation totale and
-Total des coupures (and Revenu estimé, since it's a constant multiple of
-consumption) are deliberately the opposite: computed on `df_full`, a snapshot
-of the whole month's pull taken *before* that filter runs, so a site excluded
-from grading for insufficient uptime still has its real energy use and real
-outage-minutes counted in the portfolio totals. Excluding a site from grading
-was never meant to make its actual consumption or actual downtime disappear
-from the month's real figures — those two are separate questions (is this
-site's grade trustworthy vs. how much power did the portfolio actually use).
+**The 10-day exclusion is a grading concept, and each figure below decides
+for itself whether that's relevant to what it's actually measuring:**
+
+- **Postes en ligne, Score moyen, and the CSV/table/pie/bar/Sankey
+  population** all use `df` *after* sites below the threshold are filtered
+  out — these are all fundamentally grading questions.
+- **Consommation totale** (and Revenu estimé, a constant multiple of it) uses
+  `df_full`, a snapshot of the whole month's pull taken *before* that filter
+  runs. A site excluded from grading for insufficient uptime still used real
+  energy on the rows it does have, and that energy still counts toward "how
+  much power did the portfolio actually use" — a different question from "is
+  this site's grade trustworthy."
+- **Total des coupures** uses `df` — the *graded* population, deliberately
+  the opposite of consumption. A site excluded for insufficient uptime isn't
+  experiencing a power *cut* for the minutes it has no data — the
+  transformer is disconnected/out of service, a different thing entirely
+  from a grid outage. Summing `power_cut_flag` over every site (`df_full`)
+  would let one permanently-disconnected transformer — `power_cut_flag==1`
+  on nearly every row it has — add thousands of hours to a portfolio outage
+  figure on its own. A genuine transient outage on a site that otherwise
+  passed the 10-day threshold is still counted; only the excluded sites'
+  near-total "downtime" is excluded, because it was never a real outage to
+  begin with.
+
 All five figures feed the month-over-month comparison table further down (not
 just this standalone printout), each shown against last month's figure with a
 `%` variation — revenue's variation is mathematically identical to
