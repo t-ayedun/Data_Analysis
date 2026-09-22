@@ -265,6 +265,20 @@ untrusted-workspace capability, so it is silently disabled in an untrusted folde
 If the extension will not cooperate: in Colab web, `File → Open notebook → GitHub`,
 run there, then `File → Save a copy in GitHub` to send outputs back. Pull locally.
 
+### Google Drive (if `HISTORY_PATH` points there)
+
+`drive.mount()` needs the same thing `userdata.get()` does (see Secrets below):
+an OAuth consent screen that opens in the Colab **browser tab**. Driving the
+kernel from VS Code gives you the kernel but no frontend, so that consent
+screen has nowhere to display — the mount just fails outright with a bare
+`ValueError: mount failed`, no prompt, nothing to click. The control panel
+cell retries once with `force_remount=True` (covers a stale mount point left
+over from a previous crashed session, a different and more recoverable
+cause), but if it still fails the fix is the same as for secrets: run this
+notebook from Colab's own web UI instead, or mount Drive by hand from the
+Colab UI's file browser (folder icon in the left sidebar) before running the
+control panel cell.
+
 ## Secrets
 
 Never in the repo. Set them in the Colab web UI (🔑 key icon in the sidebar), with
