@@ -10,17 +10,23 @@ It tunnels through the bastion into the SBEE Postgres database, pulls a month of
 `smart_device_readings` for the 33 mapped gateways, scores every site, and emits
 the report visuals.
 
-**Sites offline the entire month are excluded before scoring**, not graded — a
-site with `power_cut_flag == 1` (zero voltage on all three phases) for every
-single reading that month, or with zero rows at all, never reaches the grading
-pipeline. Without this, a fully-dead site's `active_power_overall_total == 0` all
-month makes `power_factor_cal` and `updated_transformer_load_percentage` both
-`NaN`, which makes `is_underloaded` read as `0` (`NaN < 30` is `False`) — so every
-`np.select()` score falls through to its `default=` branch, which for 4 of 5
-components is the score for a *healthy* site. A site that produced zero power all
-month was silently grading out at C or even B. The site count each month is
-therefore **33 minus however many were excluded**, printed by the exclusion cell
-and by the online-sites figure below.
+**Sites online less than the equivalent of 10 full days that month are excluded
+before scoring**, not graded — `INSUFFICIENT_DATA_SITES` catches any site with
+fewer than 14,400 (`10 × 1440`) one-minute readings with `power_cut_flag == 0`,
+and `NO_DATA_SITES` separately catches sites with zero rows at all. This
+replaced an earlier, narrower rule that only excluded a site if it was offline
+100% of the month: most of a site's score components are *means* over
+whatever rows it has, so a site online for barely a day still got a full
+month's grade from that one day alone — e.g. a site online ~1.3 days in July
+still averaged out to a C, because the mean doesn't know the rest of the month
+never happened for that site. The underlying mechanism is the same NaN
+cascade either way: a dead/under-sampled row's `active_power_overall_total ==
+0` makes `power_factor_cal` and `updated_transformer_load_percentage` both
+`NaN`, which makes `is_underloaded` read as `0` (`NaN < 30` is `False`) — so
+every `np.select()` score falls through to its `default=` branch, which for 4
+of 5 components is the score for a *healthy* site. The site count each month
+is therefore **33 minus however many were excluded**, printed by the
+exclusion cell and by the online-sites figure below.
 
 Scoring components (100 points total):
 
@@ -89,18 +95,24 @@ Right after grading, before the CSV export, five aggregate figures print:
 
 | Indicateur | How it's computed |
 | --- | --- |
-| Postes en ligne | Sites with voltage present on any phase on the last day of data this month, out of the graded population — sites excluded as offline all month are counted separately, not folded into this denominator |
+| Postes en ligne | Sites with voltage present on any phase on the last day of data this month, out of the graded population — sites excluded below the 10-day online threshold are counted separately, not folded into this denominator |
 | Score moyen par poste | `site_summary['total_score'].mean()` |
 | Consommation totale (kWh) | `Σ active_power_overall_total × (1/60 h)` — `active_power_overall_total` is already in kW (`POWER_IS_WATTS = False`) and is the phase-absolute-value-corrected total (see above), not the DB's raw column |
 | Revenu estimé (CFA) | Consommation × 125 CFA/kWh (`TARIFF_CFA_PER_KWH`) |
 | Total des coupures (heures) | `Σ power_cut_flag × (1/60 h)` |
 
-All three are computed on `df` *after* offline-all-month sites are filtered out —
-the same population the pie chart, the CSV, and the map use. Before this, a
-fully-dead site's ~44,000 minutes of `power_cut_flag == 1` were counted as
-portfolio outage time on a site that wasn't operating at all, substantially
-inflating this figure. Consumption barely moves from the exclusion alone — a
-dead site contributes ~0 real energy regardless.
+All five are computed on `df` *after* sites below the 10-day online threshold
+are filtered out — the same population the pie chart, the CSV, and the map
+use. Before the whole-month-only version of this rule, a fully-dead site's
+~44,000 minutes of `power_cut_flag == 1` were counted as portfolio outage time
+on a site that wasn't operating at all, substantially inflating this figure.
+Consumption barely moves from the exclusion alone — an excluded site
+contributes little real energy regardless. All five also feed the
+month-over-month comparison table further down (not just this standalone
+printout), each shown against last month's figure with a `%` variation —
+revenue's variation is mathematically identical to consumption's, since it's
+a constant multiple of it, but it's tracked as its own history column rather
+than special-cased in the comparison logic.
 
 `POWER_IS_WATTS` was originally left as an untested guess (`True`) and silently
 undercounted a real month's consumption by 1000x. It's derived now, not
@@ -120,18 +132,43 @@ granularity. And the online-site count also prints the specific offline site
 IDs, not just the total, so it's checkable against sites you already know are
 having issues.
 
-Month-over-month variation needs last month's four figures, carried the same
+Month-over-month variation needs last month's five figures, carried the same
 way as the grade counts below: the cell prints `PREVIOUS_MONTH_OVERVIEW =
 {...}` at the end of each run, ready to paste into next month's control
-panel. `None` skips the variation columns for that run.
+panel. `None` skips the variation columns for that run. A history row written
+before `estimated_revenue_cfa` existed simply lacks that key — the comparison
+falls back to `N/A` for that one figure rather than crashing, the same
+graceful-degradation pattern used for every other Aperçu figure added since
+this notebook started keeping history.
+
+### CSV export
+
+`<month>_grades.csv` uses the same French headers and column order as the
+published report's spreadsheet — `Postes, Score cumulé (mensuel), Niveau
+final, Code couleur, Puissance du transformateur, % de temps en sous-charge,
+Score du taux de charge du transformateur, Score des coupures de courant,
+Score du déséquilibre de courant, Score du facteur de puissance, Score du
+courant de neutre, Score du DHT` — built straight from `site_summary`, which
+is itself grouped from `df` *after* the exclusion cell ran. An excluded site
+can't appear in this CSV; there's no separate filter to keep in sync with the
+exclusion rule, and no manual row-deletion needed before handing it to the
+report.
 
 Outputs (all gitignored — reproduced by running the notebook) land under
 `reports/<REPORT_MONTH>/` on the Colab VM's own disk, month-prefixed so
 nothing overwrites a prior run: `<month>_grades.csv`,
 `<month>_grade_distribution_pie.png`, `<month>_comparison_chart.png`,
-`<month>_migration_sankey.html`, `<month>_graded_report_map.html`,
+`<month>_migration_sankey.html`, `<month>_migration_sankey.png`,
+`<month>_graded_report_map.html`, `<month>_graded_report_map.png`,
 `<month>_monthly_day_consumption.png` — plus a zipped copy of the whole
-folder from the notebook's last cell, which also auto-downloads it.
+folder from the notebook's last cell, which also auto-downloads it. The two
+PNGs are static exports of the interactive Sankey/map, for anyone who just
+wants to open a file rather than a browser view: the Sankey PNG uses
+`kaleido` (installed and Chrome-provisioned automatically on first use, via
+`plotly.io.get_chrome()`, if not already present); the map PNG has no
+plotly/folium equivalent, so it's a separate matplotlib scatter recreating
+the same grade colors and score-scaled marker sizes, auto-scaled to the
+plotted sites' own bounding box rather than a fixed city-wide view.
 
 `reports/` is local to that one Colab session and does not survive to next
 month — deliberately. `File → Open notebook → GitHub` loads only the
@@ -253,14 +290,17 @@ generated report artifacts, `Untitled*.ipynb` scratch notebooks, and the
 - `Connect to SBEE Database.ipynb` and `Plots for Monthly Reports - No Access to
   DB.ipynb` still hand-edit dates/filenames/counts per month — not yet migrated to
   the control-panel pattern above.
-- A site down for *part* of the month (not the whole month, so not excluded) still
-  gets its down-minutes scored via the same NaN-cascade default branches described
-  above for 4 of 5 row-level components, inflating those components' means
-  somewhat. `power_cut_score` does correctly punish the downtime (it's keyed off
-  raw minute-count, not a row-mean), so `total_score` isn't blind to it — just
-  understated relative to zeroing those specific components on
-  `power_cut_flag==1` rows, which would be a bigger change to the scoring
-  formulas than the whole-month exclusion above.
+- A site online *at least* 10 days but still down for part of the month (so not
+  excluded) still gets its down-minutes scored via the same NaN-cascade default
+  branches described above for 4 of 5 row-level components, inflating those
+  components' means somewhat. `power_cut_score` does correctly punish the
+  downtime (it's keyed off raw minute-count, not a row-mean), so `total_score`
+  isn't blind to it — just understated relative to zeroing those specific
+  components on `power_cut_flag==1` rows, which would be a bigger change to the
+  scoring formulas than the 10-day exclusion threshold above. The threshold
+  raise narrowed how much this can distort a grade (a site can no longer coast
+  on a single good day), but doesn't eliminate it for a site online, say, 15 of
+  31 days.
 - Consommation totale sat ~7–10% below published/web-app figures for two
   checked months, even under the most generous possible accounting of the
   per-minute data. Confirmed not an extraction bug (the gaps genuinely don't
