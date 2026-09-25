@@ -71,8 +71,10 @@ desktop.ini
 .tmp.driveupload/
 .tmp.drivedownload/
 
-# Colab "Untitled" scratch notebooks - noise, not work
-Colab Notebooks/Untitled*.ipynb
+# Colab "Untitled" scratch notebooks - noise, not work.
+# Path-agnostic: the rule used to be scoped to "Colab Notebooks/", which
+# silently stopped matching the moment that folder was reorganised away.
+Untitled*.ipynb
 
 # Notebook backups
 *.bak

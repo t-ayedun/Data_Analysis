@@ -2,9 +2,34 @@
 
 Analysis notebooks for SBEE site monitoring and ABMF diesel/energy work.
 
+## Repository layout
+
+```
+sbee/                     Everything SBEE
+  monthly-report/         The monthly grading report
+    Monthly Report Grading + Report Visuals.ipynb    <- the one you run
+    archive/              Frozen per-month clones from before the control panel
+      2026-07 July.ipynb
+      2026-08 August.ipynb
+  weekly-report/          The 7-day version
+  reliability/            Multi-month power-cut / reliability series
+  legacy/                 Superseded pipelines, kept for reference
+  exploratory/            One-off probes against the SBEE database
+
+ABMF/                     ABMF diesel/energy work — data at the top level,
+  notebooks/              notebooks underneath
+
+Documents/                Specs and written reports
+LSE Project/              Separate ABMF coursework
+```
+
+Everything under `sbee/monthly-report/archive/` is named `YYYY-MM Month`, so it
+sorts chronologically and keeps sorting correctly across years. Nothing new gets
+added there — that cloning pattern is retired, see below.
+
 ## The SBEE monthly report
 
-The pipeline lives in **`Colab Notebooks/Monthly Report Grading + Report Visuals.ipynb`**.
+The pipeline lives in **`sbee/monthly-report/Monthly Report Grading + Report Visuals.ipynb`**.
 
 It tunnels through the bastion into the SBEE Postgres database, pulls a month of
 `smart_device_readings` for the 33 mapped gateways, scores every site, and emits
@@ -233,16 +258,21 @@ known, or `[0, 0, 0, 0]`.
 
 | Notebook | Role |
 | --- | --- |
-| `Plots for Monthly Reports - No Access to DB.ipynb` | Same visuals, grade counts hardcoded — offline fallback. Same hand-edit-per-month problem as below; not yet migrated to the control-panel pattern — planned follow-up |
-| `Connect to SBEE Database.ipynb` | Earlier version of the same pipeline (January, `jan_grades.csv`). Same hand-edit-per-month problem; not yet migrated — planned follow-up |
-| `Weekly Report Plots.ipynb` | Same DB connection, 7-day window — the **weekly** report |
-| `Reliability Data.ipynb`, `Reliability Metrics Q1 2026.ipynb`, `Combine CSVs & Final Reliability Metrics Visual.ipynb` | Multi-month power-cut / reliability series |
-| `ABMF May 2024.ipynb`, `June 2024.ipynb` | ABMF project — grid/generator kWh from CSVs, unrelated to SBEE |
+| `sbee/weekly-report/Weekly Report Plots.ipynb` | Same DB connection, 7-day window — the **weekly** report |
+| `sbee/reliability/` | Multi-month power-cut / reliability series: `Reliability Data.ipynb`, `Reliability Metrics Q1 2026.ipynb`, `Combine CSVs & Final Reliability Metrics Visual.ipynb` |
+| `sbee/legacy/Plots for Monthly Reports - No Access to DB.ipynb` | Same visuals, grade counts hardcoded — offline fallback. Still hand-edited per month; not migrated to the control-panel pattern |
+| `sbee/legacy/Connect to SBEE Database.ipynb` | Earlier version of the same pipeline (January, `jan_grades.csv`). Still hand-edited per month; not migrated |
+| `sbee/exploratory/` | One-off probes against the SBEE database — `testing_database`, `Confirming Consumption`, `Confirming Max Current`, `Confirmation of Issues`, `C&I Solution Range`, `SBEE Visualizations`. Kept for reference, not part of any report |
+| `ABMF/notebooks/` | ABMF project — grid/generator kWh, diesel projections, load profiles. Unrelated to SBEE |
 
-`Colab Notebooks/Archived Reports/` holds one-off monthly notebook clones from
-before the control panel existed (July, August) — kept as a record of what those
+`sbee/monthly-report/archive/` holds one-off monthly notebook clones from before
+the control panel existed (July and August 2026) — kept as a record of what those
 reports actually looked like. That pattern is retired: the canonical notebook
 above is reused every month now, nothing new gets cloned.
+
+Each notebook's Colab badge encodes its own path in this repo, so a notebook that
+moves needs its badge updated in the same commit — otherwise "Open in Colab"
+quietly loads a 404 instead of the file you're looking at.
 
 ## Running the notebooks
 
@@ -326,9 +356,8 @@ generated report artifacts, `Untitled*.ipynb` scratch notebooks, and the
   against a month whose history predates the `Status` column routes that site to
   a dedicated `Statut inconnu` bucket rather than guessing — fires at most once,
   for the single month straddling this change.
-- `Connect to SBEE Database.ipynb` and `Plots for Monthly Reports - No Access to
-  DB.ipynb` still hand-edit dates/filenames/counts per month — not yet migrated to
-  the control-panel pattern above.
+- Both notebooks in `sbee/legacy/` still hand-edit dates/filenames/counts per
+  month — not yet migrated to the control-panel pattern above.
 - A site online *at least* 10 days but still down for part of the month (so not
   excluded) still gets its down-minutes scored via the same NaN-cascade default
   branches described above for 4 of 5 row-level components, inflating those
