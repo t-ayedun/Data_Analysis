@@ -183,6 +183,33 @@ falls back to `N/A` for that one figure rather than crashing, the same
 graceful-degradation pattern used for every other Aperçu figure added since
 this notebook started keeping history.
 
+### Three-month window
+
+Next to the month-over-month column, the report template carries a **3-month**
+column, and for a long time nothing generated it — it was copied forward by
+hand and went stale. June's figures (`0%`, `0%`, `-13%`, `+65%`) were still
+sitting in the August report months later. A cell now computes it from
+history: the report month plus the two before it, change measured first to
+last. All three months print as columns, not just the percentage, so there is
+no ambiguity about what was compared. Missing months are named rather than
+silently narrowing the window.
+
+Two things that make a figure here wrong rather than merely stale:
+
+- **A grade that contradicts its own score.** The total is now rounded to 2dp
+  *before* grading, so a published number can never sit next to a letter it
+  doesn't justify. C264 scored `89.99783730788086` in August: it printed as 90
+  everywhere and still graded B, because the grader saw the raw value and the
+  reader saw the rounded one. Any site landing within half a point of a band
+  edge is also listed on stdout before publishing.
+- **`Coupures` reading zero.** `power_cut_flag` only fires on a row that exists
+  and reads zero volts on all three phases. A site that goes fully dark stops
+  sending rows at all, and those minutes are invisible to it. August 2026 had
+  **no** zero-voltage minutes and still lost 326,812 readings — so outages
+  showed as a 100% improvement when nothing had improved. The overview now
+  prints missing minutes beside the outage total and warns loudly when the
+  metric has gone blind this way.
+
 ### CSV export
 
 `<month>_grades.csv` uses the same French headers and column order as the
@@ -203,7 +230,13 @@ nothing overwrites a prior run: `<month>_grades.csv`,
 `<month>_migration_sankey.html`, `<month>_migration_sankey.png`,
 `<month>_graded_report_map.html`, `<month>_monthly_day_consumption.png` —
 plus a zipped copy of the whole folder from the notebook's last cell, which
-also auto-downloads it. The Sankey PNG is a static export of the interactive
+also auto-downloads it. **The raw pull is not in that bundle.** It used to be:
+`RAW_CACHE_PATH` pointed inside `reports/<month>/`, so the August zip was 70 MB
+of parquet wrapped around 400 KB of actual report. The cache now lives beside
+`history.parquet` on Drive, which also means it survives the session ending —
+re-running a closed month skips the database entirely. The zip is built with
+`zipfile` rather than `shutil.make_archive` so it can refuse any `.parquet`
+outright, as a backstop. The Sankey PNG is a static export of the interactive
 HTML version, for anyone who just wants to open a file rather than a browser
 view, via `kaleido` pinned to **`0.2.1`** in the setup cell near the top of
 the notebook (alongside the paramiko downgrade) — not the newer
